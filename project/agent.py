@@ -1,5 +1,7 @@
-from google.cloud import bigquery 
-from google.adk.agents import Agent, SequentialAgent
+from google.cloud import bigquery
+from google.adk import Workflow
+from google.adk.workflow import START
+from google.adk.agents import Agent
 from google.adk.tools.bigquery import BigQueryToolset
 from google.adk.tools.bigquery.config import BigQueryToolConfig, WriteMode
 from pathlib import Path
@@ -75,15 +77,14 @@ data_scientist_agent = Agent(
 
     When given a CSV file and a prediction task:
     1. Call `upload_csv_to_bigquery` to load the CSV into `{PROJECT_ID}.{DATASET_ID}`. If no table name is provided, default to the name of CSV file.
-    2. Use `BigQueryToolset.get_table_info` to inspect the column names and data types of the created table.
+    2. Use `get_table_info` from `bigquery_toolset` to inspect the column names and data types of the created table.
     3. Choose an appropriate BigQuery ML model_type (`LINEAR_REG` for continuous targets, `LOGISTIC_REG` for classification).
     4. Execute a `CREATE OR REPLACE MODEL `{PROJECT_ID}.{DATASET_ID}.<table_name>_model`` SQL query via `execute_sql`, setting `input_label_cols=['<target_column>']`.
-    5. Run `SELECT * FROM ML.EVALUATE(MODEL `{PROJECT_ID}.{DATASET_ID}.<table_name>_model`)` via `BigQueryToolset.execute_sql` and report the training metrics clearly to the user.
+    5. Run `SELECT * FROM ML.EVALUATE(MODEL `{PROJECT_ID}.{DATASET_ID}.<table_name>_model`)` via `execute_sql` from `from `bigquery_toolset` and report the training metrics clearly to the user.
     6. Report graphs of Loss, Duration, and Learn rate of the training metrics to the user.
     7. Summarize the contents of the dataset to the user quantatively.
     """,
     tools=[upload_csv_to_bigquery, bigquery_toolset],
-    # sub_agents=[report_agent]
     output_key="data_summary"
 )
 
@@ -107,12 +108,11 @@ report_agent = Agent(
     """
 )
 
-root_agent = SequentialAgent(
-    name="root_agent",
-    description="Root sequential agent that orchestrates the data_scientist_agent and report_agent.",
-    sub_agents=[
-        data_scientist_agent,
-        report_agent
+root_agent = Workflow(
+    name="root_workflow",
+    description="Workflow for the data_scientist_agent and report_agent.",
+    edges=[
+        (START, data_scientist_agent, report_agent)
     ],
 
 )
