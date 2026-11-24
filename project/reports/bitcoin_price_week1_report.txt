@@ -1,0 +1,77 @@
+Bitcoin Price Modeling & Analysis Report
+
+Project: project-842dbf51-43bc-4833-997
+Dataset: agent_dest_dataset
+Table: bitcoin_price_week1
+Model: bitcoin_price_week1_model
+1. Executive Summary
+
+This report evaluates the ingestion, statistical distribution, and predictive modeling of Bitcoin daily market data over a 7-day period (August 1, 2017 – August 7, 2017). Using BigQuery ML, a linear regression model was trained to predict the daily closing price (Close) based on intraday market metrics: opening price (Open), daily high (High), daily low (Low), trading volume (Volume), and market capitalization (Market Cap).
+
+The resulting model demonstrated strong statistical convergence and high apparent explanatory power on the training sample, yielding an $R^2$ of 0.9622, a Mean Absolute Error (MAE) of $41.69, and a Root Mean Squared Error (RMSE) of $50.14 relative to an average closing price of $2,996.48. However, due to severe sample size constraints ($N = 7$), high feature-to-sample ratio, and structural target leakage from contemporaneous metrics (particularly Market Cap, High, and Low), these metrics represent an in-sample fit rather than a robust forecasting tool. Strategic recommendations are provided to build a production-grade predictive pipeline.
+2. Methodology
+2.1 Data Ingestion & Schema Definition
+
+The dataset was ingested from bitcoin/bitcoin_price_week1.csv into Google Cloud BigQuery under the table identifier: project-842dbf51-43bc-4833-997.agent_dest_dataset.bitcoin_price_week1.
+
+The table schema consists of:
+
+    Date (STRING): Date of observation (Aug 01, 2017 – Aug 07, 2017).
+    Open, High, Low (FLOAT): Daily intraday price levels in USD.
+    Close (FLOAT): Final daily settlement price in USD (Regression Target).
+    Volume (INTEGER): Total aggregate daily trading volume.
+    Market Cap (INTEGER): Total circulating market valuation in USD.
+
+2.2 Model Architecture & Training Configuration
+
+    Algorithm: Ordinary Least Squares Linear Regression (LINEAR_REG).
+    Target: Close.
+    Predictor Features: Open, High, Low, Volume, Market_Cap.
+    Optimization & Training: Executed over 20 iterations (steps 0 to 19) via BigQuery ML. Learning rates dynamically adapted between 0.20 and 0.80, reducing mean training loss from 5,758,314.39 down to 2,513.99 with an average execution duration of ~944 ms per step.
+
+3. Findings
+3.1 Market Dynamics (August 1–7, 2017)
+
+During the first week of August 2017, Bitcoin exhibited strong upward volatility, coinciding historically with the Bitcoin Cash hard fork:
+
+    Price Expansion: Bitcoin closed at a period low of $2,710.67 on August 1 and climbed to a high of $3,378.94 on August 7, representing a +24.6% gain across the 7-day period.
+    Intraday Volatility: The average spread between daily high ($3,053.93) and low ($2,856.34) was approximately $197.59 (~6.6% of mean price).
+    Trading Activity & Capitalization: Daily volume averaged $1.25B (ranging from $804.8M to $1.95B), while market capitalization expanded from $44.67B to $53.72B.
+
+Metric 	Open (USD) 	High (USD) 	Low (USD) 	Close (USD) 	Volume 	Market Cap (USD)
+Mean 	$2,926.13 	$3,053.93 	$2,856.34 	$2,996.48 	1,251,363,857 	$48,243,085,714
+Std Dev 	$222.33 	$263.15 	$224.21 	$278.48 	363,942,652 	$3,618,349,754
+Min 	$2,709.56 	$2,762.53 	$2,668.59 	$2,710.67 	804,797,000 	$44,666,400,000
+Max 	$3,257.61 	$3,397.68 	$3,180.89 	$3,378.94 	1,945,700,000 	$53,720,900,000
+3.2 Evaluation Metrics
+
+Evaluation via ML.EVALUATE indicates close mathematical alignment between predicted and actual values within this 7-day partition:
+Metric 	Score 	Analytical Interpretation
+R² Score / Explained Variance 	0.9622 	The linear model accounts for 96.22% of variance in closing prices.
+Mean Absolute Error (MAE) 	$41.69 	Average deviation of predicted close from actual close (~1.39% error rate).
+Root Mean Squared Error (RMSE) 	$50.14 	Penalized outlier metric, confirming consistent residuals across all 7 rows.
+Median Absolute Error 	$33.18 	Typical error across median observations.
+Mean Squared Log Error (MSLE) 	0.00031 	Very low scale-invariant relative error.
+4. Limitations
+
+    Extreme Sample Size Constraint ($N = 7$): A sample of seven data points is statistically insufficient for generalizable machine learning. With 5 predictor variables and 1 intercept term, the model operates with only 1 degree of freedom ($df = N - p - 1 = 7 - 5 - 1 = 1$). This almost guarantees overfitting and inflated $R^2$ values.
+    Lookahead Bias & Data Leakage: Features such as High, Low, Volume, and Market Cap are end-of-day summary figures realized concurrently with Close. In a real-world trading setting, these values are unavailable ahead of time to predict the day's close.
+    Severe Multicollinearity: Market Cap is defined as $\text{Price} \times \text{Circulating Supply}$. Consequently, Market Cap is nearly a linear transformation of the target variable Close. Combined with Open, High, and Low, the predictors exhibit extreme collinearity, which inflates parameter variance and destabilizes coefficient reliability.
+    Temporal Non-Stationarity: Cryptocurrency time series exhibit non-stationary regimes, volatility clustering, and macroeconomic regime shifts. Training on a single bullish week from 2017 prevents the model from handling bearish, sideways, or higher-volatility environments.
+
+5. Recommendations
+5.1 Data Pipeline & Expansion
+
+    Expand Historical Scope: Ingest multi-year historical data across varying market cycles (bull, bear, consolidation) to scale the dataset from 7 rows to several thousand rows.
+    Standardize Schema Typing: Convert the Date column from STRING to BigQuery native DATE or TIMESTAMP to support automated time-series windowing and partitioning.
+
+5.2 Feature Engineering for True Predictive Utility
+
+    Lagged Feature Generation: Replace same-day contemporaneous features with historical lag variables (e.g., $Close_{t-1}$, $Volume_{t-1}$, 7-day rolling moving averages, Exponential Moving Averages, RSI, and MACD) to eliminate lookahead bias.
+    Remove Direct Leakage: Exclude Market Cap or compute percentage change metrics ($\Delta \text{Market Cap}_{t-1}$) rather than absolute levels.
+    Predict Log Returns: Rather than predicting raw nominal price levels, model daily log returns ($\ln(Close_t / Close_{t-1})$) to ensure stationarity.
+
+5.3 Advanced Modeling Techniques
+
+    Time-Series Split / Cross-Validation: Replace random shuffling or in-sample evaluation with chronological forward-chaining splits (e.g., train on Days $1..T$, test on Day $T+1$).
+    Adopt Native Time-Series Models: Transition from basic linear regression to models designed for sequential financial data, such as BigQuery ML's ARIMA_PLUS, or tree-based regressors (BOOSTED_TREE_REGRESSOR) with explicit lag features.

@@ -1,0 +1,115 @@
+Predictive Modeling of Student Academic Performance: Final Report
+
+Google Cloud Project: project-842dbf51-43bc-4833-997
+Dataset: agent_dest_dataset
+Table: student_mat
+Model: student_mat_model
+1. Executive Summary
+
+This report evaluates the factors influencing student performance in secondary mathematics education and details the performance of a machine learning model developed directly in BigQuery ML. Using demographic, social, and prior academic data from 395 students, a linear regression model was trained to predict the final exam score (G3, scale 0–20).
+
+The resulting model demonstrates high predictive capability:
+
+    Coefficient of Determination ($R^2$): 0.8220, accounting for 82.2% of the variance in final mathematics grades.
+    Mean Absolute Error (MAE): 1.29 points (out of 20), with 50% of predictions within 0.81 points of actual grades.
+    Convergence: The training converged smoothly across 17 iterations, reducing loss from 18.26 to 3.73.
+
+The model provides an effective foundation for early-warning academic risk monitoring, allowing educators and administrators to flag at-risk students well before the final examination.
+2. Methodology
+2.1 Data Ingestion & Architecture
+
+    Ingestion Source: student/student-mat.csv loaded into Google BigQuery table project-842dbf51-43bc-4833-997.agent_dest_dataset.student_mat.
+    Volume: 395 student records across 33 distinct features.
+    Feature Scope:
+        Academic Indicators: First-period grade (G1), second-period grade (G2), number of past class failures (failures).
+        Behavioral & Lifestyle: Weekly study time (studytime), school absences (absences), alcohol consumption (Dalc, Walc), free time, and social outings (goout).
+        Demographics & Family Background: Age, parental education/job, family relationship quality, address type (urban/rural), and home internet access.
+
+2.2 Model Architecture & Training
+
+    Algorithm: Multiple Linear Regression (LINEAR_REG) executed natively within BigQuery ML.
+    Target Label: G3 (final grade, continuous numeric scale from 0 to 20).
+    Optimization: Gradient descent with adaptive learning rates (ranging between 0.05 and 0.20) running over 17 iterations.
+
+CREATE OR REPLACE MODEL `project-842dbf51-43bc-4833-997.agent_dest_dataset.student_mat_model`
+OPTIONS (
+  model_type = 'LINEAR_REG',
+  input_label_cols = ['G3']
+) AS
+SELECT * FROM `project-842dbf51-43bc-4833-997.agent_dest_dataset.student_mat`;
+
+      
+
+        
+      
+
+    
+
+3. Findings
+3.1 Dataset Profile & Key Metrics
+
+    Demographics: Relatively balanced gender representation (52.7% female, 47.3% male) with a mean age of 16.7 years (range: 15–22).
+    School Concentration: Strongly skewed toward Gabriel Pereira (GP, 88.4%) compared to Mousinho da Silveira (MS, 11.6%).
+    Academic Ambition & Support: 94.9% of students express a desire to pursue higher education, 83.3% have home internet access, and 45.8% take extra paid math tutoring.
+    Grade Distributions:
+        G1 (Period 1): Mean = 10.91 / 20
+        G2 (Period 2): Mean = 10.71 / 20
+        G3 (Final Grade): Mean = 10.42 / 20 (Std Dev = 4.58, Min = 0, Max = 20)
+        Notable variance exists in final grades, including a cluster of students receiving a 0 (due to exam absence or non-completion).
+
+3.2 Model Performance
+Evaluation Metric 	Value 	Operational Context
+$R^2$ Score 	0.8220 	82.2% of the variation in final scores is explained by the model's inputs.
+Mean Absolute Error (MAE) 	1.2940 	The model's predictions deviate by ~1.3 grade points on average.
+Median Absolute Error 	0.8135 	Half of all student grades are predicted within less than 1 full mark.
+Mean Squared Error (MSE) 	3.7269 	Moderate penalty on larger prediction outliers.
+Mean Squared Log Error (MSLE) 	0.2709 	Consistent performance across relative performance tiers.
+3.3 Training Convergence & Execution
+
+    Convergence: Training loss dropped steadily from 18.263 at Iteration 0 to 3.727 by Iteration 16.
+    Execution Efficiency: Mean step latency remained stable between 816 ms and 942 ms per iteration, demonstrating BigQuery ML's execution speed on tabular datasets.
+
+4. Limitations
+
+    Information Leakage via Intermediate Grades (G1, G2):
+        Incorporating G1 and G2 alongside non-academic features substantially inflates model accuracy because prior test performance is heavily correlated with the final outcome.
+        If predictions are required at the beginning of the semester before G1 or G2 are recorded, this model cannot be applied in its current structure.
+    Small Dataset Sample Size ($N = 395$):
+        The sample size is limited, and 88.4% of the population originates from a single school (GP), reducing generalizability to other school systems or educational regions.
+    Evaluation on Full Dataset / Overfitting Risk:
+        The reported evaluation was run against the training data without an explicit out-of-time or held-out test split, meaning test metrics may mildly overstate real-world performance on unseen cohorts.
+    Zero-Inflation in Final Scores:
+        Several students score 0 in G3 (often caused by dropouts, disciplinary disqualification, or absence from the final exam). Linear regression models struggle with structural zeroes, predicting negative or low fractional scores instead.
+
+5. Recommendations
+Immediate Actions
+
+    Implement an Explicit Train/Validation/Test Split:
+        Re-train the model using BigQuery ML’s automatic data splitting or define a designated holdout set (e.g., 80% train, 20% test) to validate out-of-sample generalization:
+
+        OPTIONS (
+          model_type = 'LINEAR_REG',
+          input_label_cols = ['G3'],
+          data_split_method = 'RANDOM',
+          data_split_eval_fraction = 0.2
+        )
+
+              
+
+                
+              
+
+            
+
+    Build a Two-Stage Early-Warning Pipeline:
+        Stage 1 (Pre-Semester Baseline): Train a model excluding G1 and G2 to identify baseline risk factors (e.g., prior failures, study habits, absences) before classes begin.
+        Stage 2 (In-Semester Updated Forecast): Use the current model incorporating G1 and G2 midway through the term to flag students tracking toward failure.
+
+Long-Term Enhancements
+
+    Explore Non-Linear & Tree-Based Models:
+        Benchmark the linear model against BOOSTED_TREE_REGRESSOR or RANDOM_FOREST_REGRESSOR in BigQuery ML to capture interactions between social habits (e.g., alcohol consumption combined with high absences).
+    Address Zero Scores (Two-Step Hurdle Model):
+        Model student retention/exam attendance first using a logistic classification model (LOGISTIC_REG to predict whether G3 > 0), followed by regression for students taking the exam.
+    Operationalize via Looker / Dashboards:
+        Expose model predictions using ML.PREDICT into a Looker Studio dashboard for academic counselors to facilitate targeted interventions (e.g., assigning supplementary tutoring before G3 exams).
