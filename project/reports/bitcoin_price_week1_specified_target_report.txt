@@ -1,0 +1,88 @@
+Bitcoin Price Prediction Analysis & Model Evaluation Report
+
+Project: project-842dbf51-43bc-4833-997
+Dataset: agent_dest_dataset
+Table: bitcoin_price_week1
+Model: bitcoin_price_week1_model
+1. Executive Summary
+
+This report evaluates the ingestion, exploratory data analysis, and predictive modeling performed on daily Bitcoin trading data covering the week of August 1, 2017 to August 7, 2017. A Linear Regression model (LINEAR_REG) was trained directly within Google Cloud BigQuery ML to predict Bitcoin's daily Opening Price (Open) using intraday price extremes, closing prices, volume, and market capitalization.
+
+The model achieved an apparent $R^2$ of 0.9622 and a Root Mean Squared Error (RMSE) of $50.14 (relative to an average open price of $2,926.13). However, the training dataset consists of only 7 rows, and features such as same-day High, Low, and Close introduce severe multicollinearity and lookahead bias. While mathematically converged, the model is not suitable for production trading or directional forecasting without fundamental structural adjustments.
+2. Methodology
+
+    Data Ingestion:
+        The source dataset bitcoin/bitcoin_price_week1.csv was ingested into Google BigQuery under project-842dbf51-43bc-4833-997.agent_dest_dataset.bitcoin_price_week1.
+        The data was parsed into standard numeric types (FLOAT for prices, INTEGER for volumes and market capitalization, STRING for dates).
+
+    Target & Feature Definition:
+        Target Variable: Open (continuous float value representing daily open price in USD).
+        Candidate Predictors: High, Low, Close, Volume, and Market Cap.
+
+    Model Selection & Architecture:
+        Given the continuous target, BigQuery ML’s LINEAR_REG (Linear Regression) algorithm was implemented.
+        The model was trained using BigQuery ML’s native gradient-based optimization over 20 iterations with adaptive learning rates ranging between 0.20 and 0.80.
+
+    Evaluation Framework:
+        Evaluation was conducted using ML.EVALUATE, tracking Mean Absolute Error (MAE), Mean Squared Error (MSE), Root Mean Squared Error (RMSE), Median Absolute Error, Mean Squared Log Error (MSLE), and Explained Variance ($R^2$).
+
+3. Findings
+3.1 Data Distribution (Aug 01, 2017 – Aug 07, 2017)
+
+The underlying data reflects a bullish, high-momentum week for Bitcoin:
+
+    Opening Price (Open): Ranged from $2,709.56 to $3,257.61, averaging $2,926.13 ($\pm $222.33$).
+    Spread & Volatility: Mean daily high was $3,053.93, with a peak high of $3,397.68.
+    Trading Volume & Capitalization: Average daily volume was $1.25B, with average market capitalization reaching $48.24B.
+
+Metric 	Open ($) 	High ($) 	Low ($) 	Close ($) 	Volume ($) 	Market Cap ($)
+Count 	7 	7 	7 	7 	7 	7
+Min 	2,709.56 	2,762.53 	2,668.59 	2,710.67 	804,797,000 	44,666,400,000
+Max 	3,257.61 	3,397.68 	3,180.89 	3,378.94 	1,945,700,000 	53,720,900,000
+Mean 	2,926.13 	3,053.93 	2,856.34 	2,996.48 	1,251,363,857 	48,243,085,714
+Std Dev 	222.33 	247.38 	212.78 	269.41 	378,574,863 	3,745,212,412
+3.2 Training Dynamics
+
+    Rapid Convergence: Training loss decreased by over 17 orders of magnitude (from $3.09 \times 10^6$ at Iteration 0 to $9.58 \times 10^{-12}$ at Iteration 19).
+    Compute Efficiency: Per-iteration runtimes were stable between 776 ms and 1,269 ms, reflecting BigQuery ML’s efficient processing on small datasets.
+
+3.3 Model Performance (ML.EVALUATE)
+
+The model fits the provided 7-day dataset closely:
+
+    $R^2$ / Explained Variance: 0.9622 (96.22% of variance explained).
+    Mean Absolute Error (MAE): $41.69 (~1.4% error relative to mean price).
+    Median Absolute Error: $33.18.
+    Root Mean Squared Error (RMSE): $50.14.
+    Mean Squared Log Error (MSLE): 0.00031.
+
+4. Limitations
+
+    Extreme Sample Size Constraint ($N = 7$):
+        Training a 5-feature linear regression model on only 7 data points results in just 1 degree of freedom ($N - k - 1 = 7 - 5 - 1 = 1$).
+        The high $R^2$ value (0.9622) is primarily a mathematical artifact of parameter saturation, creating severe overfitting rather than genuine generalizability.
+
+    Data Leakage & Lookahead Bias:
+        In financial markets, an opening price occurs at the beginning of the session ($t=0$).
+        Using same-day features like High, Low, and Close implies having end-of-day knowledge to predict the start-of-day price, which is impossible in real-time execution.
+
+    Collinearity:
+        High, Low, Close, and Market Cap are intrinsically collinear in asset pricing. This inflates coefficient variance and degrades predictive stability.
+
+    Narrow Temporal Window:
+        A single week from August 2017 cannot capture market cycles, structural regime shifts, macro volatility, or modern cryptocurrency market structure.
+
+5. Recommendations
+
+    Restructure as a Proper Lagged Time-Series:
+        Shift features so the model uses historical values (e.g., $Close_{t-1}$, $High_{t-1}$, $Low_{t-1}$, $Volume_{t-1}$) to predict the next session’s $Open_t$.
+        Remove contemporaneous daily features to eliminate lookahead leakage.
+
+    Expand Historical Depth:
+        Ingest at least 2–3 continuous years of daily historical data (700+ rows) or switch to hourly granularity to provide adequate statistical power.
+
+    Adopt Time-Series Specific Algorithms:
+        Leverage BigQuery ML's native univariate/multivariate time-series models such as ARIMA_PLUS or BOOSTED_TREE_REGRESSOR with lag windows.
+
+    Implement Temporal Validation:
+        Avoid standard random train/test splits. Utilize a walk-forward, rolling-window validation split (e.g., train on Days $1 \dots T$, test on Day $T+1$) to accurately measure real-world predictive utility.
