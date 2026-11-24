@@ -13,22 +13,22 @@ AGENT_DIR = Path(__file__).resolve().parent
 
 
 def detect_delimiter(file_path: Path, default: str = ";") -> str:
-  """Detects the CSV delimiter from the first few kilobytes using csv.Sniffer."""
-  with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-    sample = f.read(8192)
+    """Detects the CSV delimiter from the first few kilobytes using csv.Sniffer."""
+    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        sample = f.read(8192)
 
-  if not sample.strip():
-    return default
+    if not sample.strip():
+        return default
 
-  try:
-    dialect = csv.Sniffer().sniff(sample, delimiters=[",", ";", "|"])
-    return dialect.delimiter
-  except csv.Error:
-    return default
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=[",", ";", "|"])
+        return dialect.delimiter
+    except csv.Error:
+        return default
 
 
 def upload_csv_to_bigquery(csv_file_path: str, table_name: str) -> str:
-    """Uploads a local CSV file into a BigQuery table with schema auto-detection.
+    """Uploads a local CSV file into BigQuery
 
     Args:
         csv_file_path: Path to the local CSV file.
